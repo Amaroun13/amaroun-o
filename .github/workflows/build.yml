@@ -1,0 +1,42 @@
+name: Build, Sign and Push Custom OS
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Sestavení vašeho Containerfile a bezpečné předání klíčů pro podpis
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Containerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest
+          # Klíče se předají jako dočasné "secrety" běžící pouze uvnitř paměti buildu
+          secrets: |
+            "secureboot_key=${{ secrets.SECUREBOOT_KEY }}"
+            "secureboot_cert=${{ secrets.SECUREBOOT_CERT }}"
