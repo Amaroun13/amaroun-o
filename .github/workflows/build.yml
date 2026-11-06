@@ -1,4 +1,4 @@
-name: Build, Sign and Push Custom OS
+name: Build and Push Fedora Atomic Image
 on:
   push:
     branches: [ main ]
@@ -27,16 +27,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Sestavení vašeho Containerfile a bezpečné předání klíčů pro podpis
-      - name: Build and push Docker image
+      - name: Build and push bootc image
         id: build-and-push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Containerfile
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
-          # Klíče se předají jako dočasné "secrety" běžící pouze uvnitř paměti buildu
-          secrets: |
-            "secureboot_key=${{ secrets.SECUREBOOT_KEY }}"
-            "secureboot_cert=${{ secrets.SECUREBOOT_CERT }}"
+          tags: |
+            ghcr.io/amaroun13/amaroun-o:latest
+            ghcr.io/amaroun13/amaroun-o:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=amaroun-o
+            org.opencontainers.image.description=Fedora Atomic bootc image
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          provenance: false
+          sbom: false
