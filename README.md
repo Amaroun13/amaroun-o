@@ -24,24 +24,30 @@ sudo systemctl reboot
 ```
 
 The base Fedora kernel and bootloader are signed by Fedora and boot with Secure
-Boot enabled. NVIDIA's third-party kernel module needs a machine-specific MOK;
-an OCI image cannot enroll a certificate in firmware automatically.
+Boot enabled. The GitHub Actions build signs the NVIDIA module with the
+certificate supplied in the `SECUREBOOT_CERT` secret and the matching private
+key in `SECUREBOOT_KEY`. The private key is available only in the build step
+and is not stored in the OCI image.
 
-After the first boot, create and enroll the akmods key on the target:
+Create these repository secrets before starting the workflow:
+
+- `SECUREBOOT_KEY`: PEM-encoded private key
+- `SECUREBOOT_CERT`: PEM-encoded X.509 certificate
+
+Before the first boot, export the public certificate used by the build to a
+DER file and enroll it in the target firmware:
 
 ```bash
-sudo kmodgenca
-sudo mokutil --import /etc/pki/akmods/certs/public_key.der
+openssl x509 -in certificate.pem -outform DER -out public_key.der
+sudo mokutil --import public_key.der
 sudo systemctl reboot
 ```
 
-Confirm the MOK enrollment in the firmware screen. After booting again, build
-and install the NVIDIA module for the running kernel:
+Confirm the MOK enrollment in the firmware screen. Then install the image:
 
 ```bash
-sudo akmods --force --kernels "$(uname -r)"
-sudo depmod -a
-sudo modprobe nvidia
+sudo bootc switch ghcr.io/amaroun13/amaroun-o:latest
+sudo systemctl reboot
 ```
 
 The private MOK key is generated and kept on the target; it is never stored in

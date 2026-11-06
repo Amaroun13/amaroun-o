@@ -41,5 +41,8 @@ jobs:
             org.opencontainers.image.title=amaroun-o
             org.opencontainers.image.description=Fedora Atomic bootc image
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          secrets: |
+            secureboot_key=${{ secrets.SECUREBOOT_KEY }}
+            secureboot_cert=${{ secrets.SECUREBOOT_CERT }}
           provenance: false
           sbom: false

@@ -15,10 +15,26 @@ RUN dnf5 install -y \
         make \
         mokutil \
         nano \
+        openssl \
         tmux \
         xorg-x11-drv-nvidia-cuda \
     && dnf5 clean all \
     && rm -rf /var/cache/dnf
+
+RUN --mount=type=secret,id=secureboot_key \
+    --mount=type=secret,id=secureboot_cert \
+    set -euxo pipefail \
+    && install -Dm600 /run/secrets/secureboot_key /etc/pki/akmods/private/private_key.priv \
+    && openssl x509 -in /run/secrets/secureboot_cert -outform DER \
+        -out /etc/pki/akmods/certs/public_key.der \
+    && for kernel in /usr/lib/modules/*; do \
+        [ -d "$kernel" ] || continue; \
+        kver="${kernel##*/}"; \
+        akmods --force --kernels "$kver"; \
+    done \
+    && depmod -a \
+    && find /usr/lib/modules -type f \( -name '*.ko' -o -name '*.ko.xz' \) -print \
+    && rm -f /etc/pki/akmods/private/private_key.priv
 
 RUN flatpak remote-add --if-not-exists \
         flathub https://dl.flathub.org/repo/flathub.flatpakrepo \
