@@ -46,3 +46,26 @@ jobs:
             secureboot_cert=${{ secrets.SECUREBOOT_CERT }}
           provenance: false
           sbom: false
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign published image
+        env:
+          IMAGE_DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes \
+            "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
+
+      - name: Verify published image signature
+        env:
+          IMAGE_DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign verify \
+            --certificate-identity-regexp \
+              "^${{ github.server_url }}/${{ github.repository }}/.github/workflows/build.yml@refs/heads/main$" \
+            --certificate-oidc-issuer \
+              "https://token.actions.githubusercontent.com" \
+            "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"

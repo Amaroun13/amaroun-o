@@ -1,4 +1,4 @@
-FROM quay.io/fedora/fedora-bootc:45
+FROM quay.io/fedora/fedora-bootc:45 AS rootfs
 
 RUN dnf5 install -y \
         https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
@@ -41,3 +41,46 @@ RUN flatpak remote-add --if-not-exists \
     && flatpak install --system --assumeyes flathub org.mozilla.firefox \
     && flatpak repair --system \
     && rm -rf /var/tmp/* /var/cache/*
+
+FROM rootfs AS split
+
+RUN mkdir -p /kernel \
+    && bootc container split-kernel-and-rootfs \
+        --rootfs / \
+        --output /kernel
+
+FROM rootfs AS sealed-uki
+
+RUN dnf5 install -y \
+        sbsigntools \
+        systemd-boot-unsigned \
+        systemd-ukify \
+    && dnf5 clean all \
+    && rm -rf /var/cache/dnf
+
+RUN --mount=type=bind,from=split,source=/kernel,target=/kernel,ro \
+    --mount=type=bind,from=split,target=/target,ro \
+    --mount=type=secret,id=secureboot_key \
+    --mount=type=secret,id=secureboot_cert \
+    set -euxo pipefail \
+    && mkdir -p /out/uki \
+    && kver="$(find /kernel -mindepth 1 -maxdepth 1 -type d -printf '%f\n')" \
+    && bootc container ukify \
+        --rootfs /target \
+        --kernel-dir "/kernel/${kver}" \
+        -- \
+        --output "/out/uki/${kver}.efi" \
+        --signtool sbsign \
+        --secureboot-private-key /run/secrets/secureboot_key \
+        --secureboot-certificate /run/secrets/secureboot_cert \
+    && sbsign \
+        --key /run/secrets/secureboot_key \
+        --cert /run/secrets/secureboot_cert \
+        --output /out/systemd-bootx64.efi \
+        /usr/lib/systemd/boot/efi/systemd-bootx64.efi
+
+FROM split
+
+COPY --from=sealed-uki /out/uki/*.efi /boot/EFI/Linux/
+COPY --from=sealed-uki /out/systemd-bootx64.efi \
+    /usr/lib/systemd/boot/efi/systemd-bootx64.efi
